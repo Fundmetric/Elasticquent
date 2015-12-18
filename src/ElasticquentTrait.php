@@ -327,8 +327,6 @@ trait ElasticquentTrait
             }
         }
 
-        dd($includeFields);
-
         // Get our document body data.
         $params['body'] = $includeFields;
 
@@ -475,7 +473,6 @@ trait ElasticquentTrait
     {
         $instance = new static;
         $instance->createIndex(false);
-        $instance->putMapping();
     }
 
     /**
@@ -514,7 +511,6 @@ trait ElasticquentTrait
         } else {
             $instance->updateAlias($index['write'], $index['name']);
         }
-        $instance->putMapping();
     }
 
 
@@ -532,11 +528,7 @@ trait ElasticquentTrait
             'index' => $alias
         ];
 
-        try {
-            $index = collect($client->indices()->get($params))->keys()[0];
-        } catch (Exception $exception) {
-            $index = '';
-        }
+        $index = collect($client->indices()->get($params))->keys()[0];
 
         return $index;
     }
@@ -638,8 +630,27 @@ trait ElasticquentTrait
         $client = $instance->getElasticSearchClient();
 
         $old_index = $instance->getIndex($name);
-        $instance->deleteAlias($name, $old_index);
-        $instance->createAlias($name, $index);
+
+        $params = [
+            'body' => [
+                'actions' => [
+                    [
+                        'add' => [
+                            'index' => $index,
+                            'alias' => $name
+                        ]
+                    ],
+                    [
+                        'remove' => [
+                            'index' => $old_index,
+                            'alias' => $name
+                        ]
+                    ]
+                ]
+            ],
+        ];
+
+        $client->indices()->updateAliases($params);
     }
 
     /**
