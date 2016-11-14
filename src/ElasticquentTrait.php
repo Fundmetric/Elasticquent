@@ -348,6 +348,10 @@ trait ElasticquentTrait
     public function removeFromIndex()
     {
         $params = $this->getBasicEsParams('write');
+
+        // Add the document key to delete
+        $params['id'] = $this->getKey();
+
         return $this->getElasticSearchClient()->delete($params);
     }
 
