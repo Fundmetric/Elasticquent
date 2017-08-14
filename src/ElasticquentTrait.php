@@ -304,6 +304,59 @@ trait ElasticquentTrait
     }
 
     /**
+     * Chunk the results of the Elasticsearch query using the Scroll API, to allow for an unlimited number of results.
+     * The 'scroll' param lets ES know how long to hold onto each page of results. The results do not change from
+     * the initial query, for as long as the scroll window is open (they aren't affected by index CRUD's).
+     *
+     * Time units for the 'scroll' param include:
+     *  y - Year
+     *  M - Month
+     *  w - Week
+     *  d - Day
+     *  h - Hour
+     *  m - Minute
+     *  s - Second
+     *  ms - Millisecond
+     *
+     * @param $query
+     * @param int $size - Chunk size
+     * @param string $scrollTime - Amount of time to keep scroll results window alive
+     * @param callable $callback - Processing function to run while chunking results
+     */
+    public static function scroll($query, $size = 100, $scrollTime = '1m', callable $callback)
+    {
+        $instance = new static;
+
+        $params = $instance->getBasicEsParams();
+
+        $params['body'] = $query;
+        $params['scroll'] = $scrollTime;    // Time to keep scroll results window alive
+        $params['size'] = $size;            // Chunk size
+
+        // The initial call to search will return a _scroll_id for subsequent calls to the scroll API
+        $results = $instance->getElasticSearchClient()->search($params);
+
+        while (count($results['hits']['hits']) > 0)
+        {
+            // Grab the scroll_id from the previous ES response
+            $scrollId = $results['_scroll_id'];
+
+            // On each chunk result set, we will pass them to the callback and then let the
+            // developer take care of everything within the callback, which allows us to
+            // keep the memory low for spinning through large result sets for working.
+            call_user_func($callback, new ResultCollection($results, $instance = new static));
+
+            $params = [
+                'scroll'    => $scrollTime,
+                'scroll_id' => $scrollId
+            ];
+
+            // Grab the next set of results
+            $results = $instance->getElasticSearchClient()->scroll($params);
+        }
+    }
+
+    /**
      * Add to Search Index
      *
      * @throws Exception
