@@ -306,7 +306,7 @@ trait ElasticquentTrait
     /**
      * Chunk the results of the Elasticsearch query using the Scroll API, to allow for an unlimited number of results.
      * The 'scroll' param lets ES know how long to hold onto each page of results. The results do not change from
-     * the initial query, for as long as the scroll window is open (they aren't affected by index CRUD's).
+     * the initial query, for as long as the scroll window is open (they aren't affected by index CRUD).
      *
      * Time units for the 'scroll' param include:
      *  y - Year
@@ -319,19 +319,34 @@ trait ElasticquentTrait
      *  ms - Millisecond
      *
      * @param $query
-     * @param int $size - Chunk size
-     * @param string $scrollTime - Amount of time to keep scroll results window alive
      * @param callable $callback - Processing function to run while chunking results
+     * @param array $otherParams
      */
-    public static function scroll($query, $size = 100, $scrollTime = '1m', callable $callback)
+    public static function scroll($query, callable $callback, $otherParams = [])
     {
         $instance = new static;
 
         $params = $instance->getBasicEsParams();
 
+        // Add any user-supplied params
+        foreach ($otherParams as $paramKey => $paramValue)
+        {
+            $params[$paramKey] = $paramValue;
+        }
+
         $params['body'] = $query;
-        $params['scroll'] = $scrollTime;    // Time to keep scroll results window alive
-        $params['size'] = $size;            // Chunk size
+
+        // Time to keep scroll results window alive
+        if (! isset($params['scroll']))
+        {
+            $params['scroll'] = '1m';
+        }
+
+        // Chunk size
+        if (! isset($params['size']))
+        {
+            $params['size'] = 100;
+        }
 
         // The initial call to search will return a _scroll_id for subsequent calls to the scroll API
         $results = $instance->getElasticSearchClient()->search($params);
@@ -347,7 +362,7 @@ trait ElasticquentTrait
             call_user_func($callback, new ResultCollection($results, $instance = new static));
 
             $params = [
-                'scroll'    => $scrollTime,
+                'scroll'    => $params['scroll'],
                 'scroll_id' => $scrollId
             ];
 
